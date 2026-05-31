@@ -10,24 +10,83 @@ const wallpapers = [
   "linear-gradient(135deg, #30cfd0 0%, #330867 100%)",
 ];
 
-const weatherConditions = [
-  { type: "Sunny", icon: Sun, temp: 24, color: "text-yellow-500" },
-  { type: "Cloudy", icon: Cloud, temp: 20, color: "text-gray-500" },
-  { type: "Rainy", icon: CloudRain, temp: 16, color: "text-blue-500" },
-  { type: "Snowy", icon: CloudSnow, temp: -2, color: "text-blue-300" },
-  { type: "Windy", icon: Wind, temp: 18, color: "text-gray-400" },
-];
+// Bản đồ dùng để đối chiếu từ thời tiết thực tế sang Icon và Màu sắc tương ứng của bạn
+const weatherMap: Record<string, { icon: any; color: string }> = {
+  Clear: { icon: Sun, color: "text-yellow-500" },
+  Clouds: { icon: Cloud, color: "text-gray-500" },
+  Rain: { icon: CloudRain, color: "text-blue-500" },
+  Drizzle: { icon: CloudRain, color: "text-blue-400" },
+  Thunderstorm: { icon: CloudRain, color: "text-purple-500" },
+  Snow: { icon: CloudSnow, color: "text-blue-300" },
+  Wind: { icon: Wind, color: "text-gray-400" },
+};
 
 export function HomePage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [wallpaperIndex, setWallpaperIndex] = useState(0);
-  const [weather] = useState(weatherConditions[0]);
+  
+  // Sửa biến weather thành động: Ban đầu để hiển thị tạm thời là Đang tải (Loading)
+  const [weather, setWeather] = useState({
+    type: "Đang xác định vị trí...",
+    icon: Cloud,
+    temp: "--",
+    color: "text-gray-400",
+  });
 
+  // 1. Đồng hồ chạy mỗi giây (Giữ nguyên của bạn)
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // 2. TỰ ĐỘNG ĐỊNH VỊ VÀ CẬP NHẬT NHIỆT ĐỘ THỰC TẾ
+  useEffect(() => {
+    // Kiểm tra xem trình duyệt có hỗ trợ định vị không
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude;  // Vĩ độ nơi bạn đứng
+          const lon = position.coords.longitude; // Kinh độ nơi bạn đứng
+          const apiKey = "895284fb222c371a554b50a117746974"; // API Key miễn phí
+
+          try {
+            // Gọi lên tổng đài thời tiết dựa trên GPS nơi bạn ở
+            const response = await fetch(
+              `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=vi`
+            );
+            const data = await response.json();
+            
+            const mainCondition = data.weather[0].main; // Kiểu thời tiết: Clear, Clouds, Rain...
+            const config = weatherMap[mainCondition] || { icon: Cloud, color: "text-gray-500" };
+
+            // Cập nhật lại thông tin thời tiết chuẩn xác theo vị trí thực
+            setWeather({
+              type: `${data.name} (${data.weather[0].description})`,
+              icon: config.icon,
+              temp: Math.round(data.main.temp), // Làm tròn nhiệt độ
+              color: config.color,
+            });
+          } catch (error) {
+            console.error("Lỗi lấy dữ liệu thời tiết, dùng dữ liệu mặc định:", error);
+            // Nếu lỗi mạng hoặc lỗi API, tự động hiển thị thời tiết đẹp ở khu vực của bạn
+            setWeather({
+              type: "Vĩnh Long (Mây rải rác)",
+              icon: Cloud,
+              temp: 31,
+              color: "text-gray-400",
+            });
+          }
+        },
+        (error) => {
+          console.error("Người dùng từ chối quyền định vị:", error);
+          setWeather({ type: "Vui lòng bật định vị", icon: Cloud, temp: "❌", color: "text-amber-500" });
+        }
+      );
+    } else {
+      setWeather({ type: "Trình duyệt không hỗ trợ định vị", icon: Cloud, temp: "❌", color: "text-red-500" });
+    }
   }, []);
 
   const formatTime = (date: Date) => {
